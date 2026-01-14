@@ -59,7 +59,7 @@ This triggers a GitHub Actions workflow that builds and pushes:
 Images are also tagged with:
 - `v1.0` (major.minor)
 - `v1` (major)
-- `<branch>-<sha>` (commit SHA)
+- `sha-<commit>` (commit SHA)
 
 **Using the images:**
 ```bash
