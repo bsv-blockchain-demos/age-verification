@@ -53,18 +53,17 @@ git push origin v1.0.0
 ```
 
 This triggers a GitHub Actions workflow that builds and pushes:
-- `ghcr.io/<owner>/<repo>-backend:v1.0.0`
-- `ghcr.io/<owner>/<repo>-frontend:v1.0.0`
+- `ghcr.io/<owner>/<repo>-backend:1.0.0`
+- `ghcr.io/<owner>/<repo>-frontend:1.0.0`
 
 Images are also tagged with:
-- `v1.0` (major.minor)
-- `v1` (major)
-- `sha-<commit>` (commit SHA)
+- `1.0` (major.minor)
+- `1` (major)
 
 **Using the images:**
 ```bash
-docker pull ghcr.io/<owner>/<repo>-backend:v1.0.0
-docker pull ghcr.io/<owner>/<repo>-frontend:v1.0.0
+docker pull ghcr.io/<owner>/<repo>-backend:1.0.0
+docker pull ghcr.io/<owner>/<repo>-frontend:1.0.0
 ```
 
 ### Stopping the Services
