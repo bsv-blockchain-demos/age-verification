@@ -4,22 +4,47 @@ import { Button } from '@/components/ui/button';
 import { useWallet } from '@/context/WalletContext';
 import { Utils, AuthFetch } from '@bsv/sdk';
 import { toast } from 'sonner';
-import { ShieldCheck, Video, Clock, CheckCircle2, XCircle } from 'lucide-react';
-import { CountdownTimer } from './CountdownTimer';
+import { ShieldCheck, Video, CheckCircle2, XCircle, Award } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 const CERTIFIER_PUBLIC_KEY = '03c644fe2fd97673a5d86555a58587e7936390be6582ece262bc387014bcff6fe4';
+const certificateType = Utils.toBase64(Utils.toArray('age-verification', 'utf8'));
 
 type AppMode = 'initial-attempt' | 'certificate-acquisition' | 'content-access';
 
 export function AccessControlDemo() {
   const { wallet, isInitialized } = useWallet();
   const [mode, setMode] = useState<AppMode>('initial-attempt');
-  const [hasCertificate, setHasCertificate] = useState(false);
-  const [certificateExpiry, setCertificateExpiry] = useState<number | null>(null);
   const [certificateSerialNumber, setCertificateSerialNumber] = useState<string | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  async function checkCerts() {
+    if (!wallet || !isInitialized) {
+      return;
+    }
+
+    const certList = await wallet.listCertificates({
+      certifiers: [CERTIFIER_PUBLIC_KEY],
+      types: [certificateType],
+      limit: 10 // Get multiple certificates to see which ones exist
+    });
+
+    console.log('Certificate list:', certList);
+
+    if (certList.certificates && certList.certificates.length > 0) {
+      const cert = certList.certificates[0];
+      setCertificateSerialNumber(cert.serialNumber);
+      console.log('Certificate serial number:', cert.serialNumber);
+      console.log('Certificate fields:', cert.fields);
+    }
+  }
+
+  useEffect(() => {
+    checkCerts().then(() => {
+      setIsLoading(false);
+    });
+  }, [wallet, isInitialized]);
 
   const attemptAccessWithoutCertificate = async () => {
     if (!wallet || !isInitialized) {
@@ -77,8 +102,7 @@ export function AccessControlDemo() {
     toast.loading('Requesting age verification certificate...');
 
     try {
-      const certificateType = Utils.toBase64(Utils.toArray('age-verification', 'utf8'));
-
+      
       // First, relinquish any existing certificates to avoid sending old ones
       const existingCerts = await wallet.listCertificates({
         certifiers: [CERTIFIER_PUBLIC_KEY],
@@ -134,9 +158,6 @@ export function AccessControlDemo() {
         console.log('Certificate fields:', cert.fields);
       }
 
-      setHasCertificate(true);
-      // Use the local timestamp for expiry tracking since we created it
-      setCertificateExpiry(timestamp + 180); // Expires in 180 seconds (3 minutes)
       toast.dismiss();
       toast.success('Certificate acquired successfully!');
 
@@ -171,12 +192,17 @@ export function AccessControlDemo() {
 
       const authFetch = new AuthFetch(wallet);
 
-      const response = await authFetch.fetch(`${API_BASE_URL}/protected/video`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await Promise.race([
+        authFetch.fetch(`${API_BASE_URL}/protected/video`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }),
+        new Promise<Response>((_, reject) =>
+          setTimeout(() => reject(new Error('Request timed out')), 3000)
+        )
+      ]);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -197,14 +223,34 @@ export function AccessControlDemo() {
     }
   };
 
-  const relinquishExpiredCertificate = async () => {
+  const relinquishCertificate = async () => {
     if (!wallet || !isInitialized || !certificateSerialNumber) {
       return;
     }
 
-    try {
-      console.log('Relinquishing expired certificate:', certificateSerialNumber);
+    setIsLoading(true);
+    toast.loading('Relinquishing certificate...');
 
+    try {
+      console.log('Relinquishing certificate:', certificateSerialNumber);
+
+      // Create AuthFetch instance
+      const authFetch = new AuthFetch(wallet);
+
+      // Call backend to clear verification
+      const response = await authFetch.fetch(`${API_BASE_URL}/relinquish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to relinquish certificate');
+      }
+
+      // Relinquish certificate from wallet
       await wallet.relinquishCertificate({
         type: Utils.toBase64(Utils.toArray('age-verification', 'utf8')),
         serialNumber: certificateSerialNumber,
@@ -212,43 +258,25 @@ export function AccessControlDemo() {
       });
 
       console.log('Certificate relinquished successfully');
-      toast.info('Expired certificate has been relinquished');
+      toast.dismiss();
+      toast.success('Certificate relinquished successfully');
 
-      setCertificateSerialNumber(null);
-    } catch (error) {
+      // Reset state
+      resetDemo();
+    } catch (error: any) {
       console.error('Error relinquishing certificate:', error);
+      toast.dismiss();
+      toast.error(error.message || 'Failed to relinquish certificate');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const resetDemo = () => {
     setMode('initial-attempt');
-    setHasCertificate(false);
-    setCertificateExpiry(null);
     setCertificateSerialNumber(null);
     setVideoUrl(null);
   };
-
-  const isExpired = () => {
-    if (!certificateExpiry) return false;
-    const now = Math.floor(Date.now() / 1000);
-    return now >= certificateExpiry;
-  };
-
-  // Check for expired certificates and relinquish them
-  useEffect(() => {
-    if (!hasCertificate || !certificateExpiry || !certificateSerialNumber) {
-      return;
-    }
-
-    const checkExpiry = setInterval(() => {
-      if (isExpired() && certificateSerialNumber) {
-        relinquishExpiredCertificate();
-        clearInterval(checkExpiry);
-      }
-    }, 1000); // Check every second
-
-    return () => clearInterval(checkExpiry);
-  }, [hasCertificate, certificateExpiry, certificateSerialNumber]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50">
@@ -269,29 +297,38 @@ export function AccessControlDemo() {
           </p>
         </div>
 
-        {/* Mode Indicator */}
+        {/* Mode Tabs - Click to navigate */}
         <div className="mb-8 flex justify-center gap-4">
-          <div className={`px-6 py-3 rounded-full font-medium transition-all ${
-            mode === 'initial-attempt'
-              ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg'
-              : 'bg-white/60 text-slate-600'
-          }`}>
+          <button
+            onClick={() => setMode('initial-attempt')}
+            className={`px-6 py-3 rounded-full font-medium transition-all cursor-pointer hover:scale-105 ${
+              mode === 'initial-attempt'
+                ? 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg'
+                : 'bg-white/60 text-slate-600 hover:bg-white/80'
+            }`}
+          >
             <span className="mr-2">1.</span> Attempt Access
-          </div>
-          <div className={`px-6 py-3 rounded-full font-medium transition-all ${
-            mode === 'certificate-acquisition'
-              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg'
-              : 'bg-white/60 text-slate-600'
-          }`}>
+          </button>
+          <button
+            onClick={() => setMode('certificate-acquisition')}
+            className={`px-6 py-3 rounded-full font-medium transition-all cursor-pointer hover:scale-105 ${
+              mode === 'certificate-acquisition'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg'
+                : 'bg-white/60 text-slate-600 hover:bg-white/80'
+            }`}
+          >
             <span className="mr-2">2.</span> Acquire Certificate
-          </div>
-          <div className={`px-6 py-3 rounded-full font-medium transition-all ${
-            mode === 'content-access'
-              ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg'
-              : 'bg-white/60 text-slate-600'
-          }`}>
+          </button>
+          <button
+            onClick={() => setMode('content-access')}
+            className={`px-6 py-3 rounded-full font-medium transition-all cursor-pointer hover:scale-105 ${
+              mode === 'content-access'
+                ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg'
+                : 'bg-white/60 text-slate-600 hover:bg-white/80'
+            }`}
+          >
             <span className="mr-2">3.</span> Access Content
-          </div>
+          </button>
         </div>
 
         {/* Initial Attempt Mode */}
@@ -351,14 +388,14 @@ export function AccessControlDemo() {
                 Step 2: Acquire Age Verification Certificate
               </CardTitle>
               <CardDescription className="text-lg text-slate-700 mt-3">
-                Request a short-lived certificate (3 minutes) to prove you're over 18
+                Request a certificate to prove you're over 18
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-8">
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-lg border border-emerald-200">
                   <h3 className="font-semibold text-emerald-900 mb-3 flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
+                    <Award className="w-5 h-5" />
                     Certificate Details
                   </h3>
                   <ul className="space-y-2 text-slate-700">
@@ -368,11 +405,11 @@ export function AccessControlDemo() {
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      <span><strong>Validity:</strong> 3 minutes (180 seconds)</span>
+                      <span><strong>Validity:</strong> Until manually relinquished</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      <span><strong>Fields:</strong> over18 (boolean), timestamp (unix)</span>
+                      <span><strong>Fields:</strong> over18 (boolean)</span>
                     </li>
                   </ul>
                 </div>
@@ -401,28 +438,22 @@ export function AccessControlDemo() {
                     <ShieldCheck className="w-7 h-7" />
                     Certificate Status
                   </span>
-                  {!isExpired() ? (
-                    <span className="text-lg font-normal text-emerald-600 flex items-center gap-2">
-                      <CheckCircle2 className="w-5 h-5" />
-                      Valid
-                    </span>
-                  ) : (
-                    <span className="text-lg font-normal text-red-600 flex items-center gap-2">
-                      <XCircle className="w-5 h-5" />
-                      Expired
-                    </span>
-                  )}
+                  <span className="text-lg font-normal text-emerald-600 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    Active
+                  </span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
-                  {certificateExpiry && <CountdownTimer expiryTimestamp={certificateExpiry} />}
+                  <p className="text-slate-600">Certificate is active and ready to use</p>
                   <Button
-                    onClick={resetDemo}
+                    onClick={relinquishCertificate}
+                    disabled={isLoading}
                     variant="outline"
-                    className="border-teal-300 text-teal-700 hover:bg-teal-50"
+                    className="border-red-300 text-red-700 hover:bg-red-50"
                   >
-                    Reset Demo
+                    {isLoading ? 'Relinquishing...' : 'Relinquish Certificate'}
                   </Button>
                 </div>
               </CardContent>
@@ -451,18 +482,12 @@ export function AccessControlDemo() {
 
                     <Button
                       onClick={requestAccess}
-                      disabled={!isInitialized || isLoading || isExpired()}
+                      disabled={!isInitialized || isLoading}
                       className="w-full py-7 text-lg bg-gradient-to-r from-teal-500 via-cyan-500 to-teal-600 hover:from-teal-600 hover:via-cyan-600 hover:to-teal-700 text-white shadow-xl hover:shadow-2xl transition-all duration-300"
                       size="lg"
                     >
                       {isLoading ? 'Requesting Access...' : 'Request Access to Video'}
                     </Button>
-
-                    {isExpired() && (
-                      <p className="text-center text-red-600 font-medium">
-                        Your certificate has expired. Please acquire a new certificate to access content.
-                      </p>
-                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">

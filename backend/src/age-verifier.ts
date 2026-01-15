@@ -12,4 +12,8 @@ export class AgeVerifier {
         return this.identityToOver18Map.get(identity) === true;
     }
 
+    clearVerification(identity: string): void {
+        this.identityToOver18Map.delete(identity);
+    }
+
 }

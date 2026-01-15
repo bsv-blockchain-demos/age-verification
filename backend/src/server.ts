@@ -62,13 +62,9 @@ async function startServer() {
           // Replace encrypted fields with decrypted values
           cert.fields = decryptedFields;
 
-          // Validate timestamp is within last 3 minutes
-          const timestamp = parseInt(cert.fields.timestamp);
-          const now = Math.floor(Date.now() / 1000);
-          const certAge = now - timestamp;
-          console.log({ timestamp, now, certAge })
-          if (cert.fields.over18 === 'true' && certAge < 180 && timestamp <= now) {
-            console.log('setting verified over 18', { senderPublicKey, timestamp, now, certAge });
+          // Check if user is over 18
+          if (cert.fields.over18 === 'true') {
+            console.log('setting verified over 18', { senderPublicKey });
             age.setVerifiedOver18(senderPublicKey);
           }
         }
@@ -121,6 +117,33 @@ async function startServer() {
 
     } catch (error) {
       console.error('Error validating certificate:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Relinquish certificate endpoint
+  app.post('/relinquish', (req: AuthRequest, res: Response) => {
+    try {
+      const identityKey = req?.auth?.identityKey as string;
+
+      if (!identityKey || identityKey === 'unknown') {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
+
+      console.log('Relinquishing certificate for:', identityKey);
+      age.clearVerification(identityKey);
+      const session = sessionManager.getSession(identityKey);
+      if (session) {
+        sessionManager.removeSession(session);
+      }
+
+      res.json({
+        success: true,
+        message: 'Certificate relinquished'
+      });
+
+    } catch (error) {
+      console.error('Error relinquishing certificate:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
