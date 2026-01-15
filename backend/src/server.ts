@@ -98,7 +98,7 @@ async function startServer() {
   app.use(authMiddleware)
 
   // Protected routes (require auth & certificates)
-  app.get('/api/protected/video', (req: AuthRequest, res: Response) => {
+  app.get('/protected/video', (req: AuthRequest, res: Response) => {
     try {
       const identityKey = req?.auth?.identityKey as string;
 

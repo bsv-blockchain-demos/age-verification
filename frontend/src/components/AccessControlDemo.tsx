@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { ShieldCheck, Video, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { CountdownTimer } from './CountdownTimer';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3002';
 const CERTIFIER_PUBLIC_KEY = '03c644fe2fd97673a5d86555a58587e7936390be6582ece262bc387014bcff6fe4';
 
 type AppMode = 'initial-attempt' | 'certificate-acquisition' | 'content-access';
