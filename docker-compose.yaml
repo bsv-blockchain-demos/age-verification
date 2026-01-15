@@ -21,7 +21,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://age-verification-api.bsvb.tech
+        - VITE_API_URL=http://localhost:3002
     container_name: age-verification-frontend
     ports:
       - "8080:8080"

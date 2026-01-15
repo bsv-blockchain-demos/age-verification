@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@bsv/sdk": "^1.9.18",
+    "@bsv/sdk": "^1.10.1",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
     "@tailwindcss/postcss": "^4.1.17",
