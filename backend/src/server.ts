@@ -63,6 +63,11 @@ async function startServer (): Promise<void> {
       decryptFields(cert)
         .then(() => {
           console.log('Decrypted fields', cert.fields)
+          // Store verification if over18 is true
+          if (cert.fields?.over18 === 'true') {
+            console.log('Setting verified over 18 for:', senderPublicKey)
+            age.setVerifiedOver18(senderPublicKey)
+          }
         })
         .catch((error) => {
           console.error('Error decrypting fields:', error)
@@ -76,6 +81,7 @@ async function startServer (): Promise<void> {
   // Create auth middleware
   // Note: We don't request certificates here because the frontend acquires them
   // explicitly and sends them when making authenticated requests
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const authMiddleware = createAuthMiddleware({
     wallet,
     certificatesToRequest: {
@@ -85,13 +91,16 @@ async function startServer (): Promise<void> {
       }
     },
     sessionManager,
-    onCertificatesReceived
+    onCertificatesReceived: onCertificatesReceived as any,
+    logger: console,
+    logLevel: 'debug'
   })
 
-  app.use(authMiddleware)
+  // Use type assertion to work around @types/express version mismatch with linked packages
+  app.use(authMiddleware as any)
 
   // Protected routes (require auth & certificates)
-  app.get('/protected/video', (req: AuthRequest, res: Response) => {
+  app.get('/protected/video', (req: any, res: Response) => {
     try {
       const identityKey = req?.auth?.identityKey as string
       console.log('Identity key:', identityKey)
@@ -115,7 +124,7 @@ async function startServer (): Promise<void> {
   })
 
   // Relinquish certificate endpoint
-  app.post('/relinquish', (req: AuthRequest, res: Response) => {
+  app.post('/relinquish', (req: any, res: Response) => {
     try {
       const identityKey = req?.auth?.identityKey as string
 
