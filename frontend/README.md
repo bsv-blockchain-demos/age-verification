@@ -1,73 +1,67 @@
-# React + TypeScript + Vite
+# Age Verification Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React interface for a BSV certificate access demonstration. The flow attempts access without a certificate, requests an `age-verification` certificate through a compatible wallet, then retries the request using `AuthFetch`.
 
-Currently, two official plugins are available:
+See the [project overview](../README.md) for the backend and container layout.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Requirements
 
-## React Compiler
+- Node.js 22.13 or later in the 22.x release line, and npm.
+- A BRC-100 wallet accessible through `WalletClient` for certificate operations.
+- The [backend](../backend/src/server.ts), normally at `http://localhost:3002`.
+- Access to the certifier configured in [AccessControlDemo.tsx](src/components/AccessControlDemo.tsx).
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Run locally
 
-## Expanding the ESLint configuration
+From the repository root:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```sh
+cd frontend
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Create `frontend/.env.local` with:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```dotenv
+VITE_API_URL=http://localhost:3002
 ```
+
+Start the development server:
+
+```sh
+npm run dev -- --host 127.0.0.1
+```
+
+Open the URL printed by Vite, normally `http://localhost:5173`. Start and configure the backend separately. The checked-in `.env.example` targets a hosted API; use the local value above when developing against your own backend.
+
+`VITE_API_URL` selects the access-control API. It does not change the certifier: the certifier URL and public key are fixed in the component, and the backend expects the same certifier key.
+
+## Demonstration flow
+
+1. Attempt access without a certificate.
+2. Request a certificate through the wallet.
+3. Retry access using the wallet's authenticated request flow.
+4. Relinquish the certificate and clear the backend's verification state to repeat the demonstration.
+
+Acquisition first attempts to relinquish existing certificates of the configured type and certifier. Use a wallet intended for this demonstration.
+
+## Current limitations
+
+The frontend submits `over18: 'true'` and a timestamp to the external certifier. It does not collect or independently validate a date of birth; any real age checks depend on the certifier's implementation.
+
+The video is included under `public/video/` and is served as a public static asset. The API controls whether the interface receives its URL, but does not protect direct access to the file. This demonstrates certificate exchange, not a complete system for restricting access to content.
+
+The backend keeps verification state in memory and starts certificate-field decryption asynchronously before continuing request handling. A first authenticated request can therefore arrive before verification state is set.
+
+## Build and source guide
+
+```sh
+npm run build
+npm run preview -- --host 127.0.0.1
+```
+
+The build type-checks the application and writes static assets to `dist/`. API configuration is embedded at build time. `npm run lint` is also available; no test script is defined.
+
+- [AccessControlDemo.tsx](src/components/AccessControlDemo.tsx): certificate acquisition, access requests and reset flow.
+- [WalletContext.tsx](src/context/WalletContext.tsx): wallet client setup.
+- [Dockerfile](Dockerfile) and [nginx.conf](nginx.conf): static hosting on container port 8080.
