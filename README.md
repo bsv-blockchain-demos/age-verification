@@ -1,155 +1,80 @@
-# Age Verification System
+# Age Verification Certificate Demo
 
-A BSV blockchain-based age verification system with a React frontend and Express backend.
+A React and Express demonstration of requesting a BSV age-verification certificate and presenting it through an authenticated wallet request. The interface first attempts access without a certificate, requests one through a compatible wallet, then retries the API request.
 
-## Quick Start with Docker
+This demonstrates certificate exchange. It is not a complete age-checking or protected-media service: the frontend submits an `over18` claim, and the sample video remains directly accessible as a public static file.
 
-### Prerequisites
-- Docker and Docker Compose installed
+## Components
 
-### Running the Application
+| Component | Purpose |
+| --- | --- |
+| [frontend/](frontend/README.md) | Wallet connection, certificate acquisition and access demonstration. |
+| [backend/src/server.ts](backend/src/server.ts) | Certificate authentication, in-memory verification state and video-URL endpoint. |
+| External certifier | Signs the requested certificate; its URL and public key are configured in the source. |
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd age-verification
-```
+The certifier service is a separate dependency. Its implementation determines whether a submitted age claim is actually checked.
 
-2. Start the services:
-```bash
-docker-compose up -d
-```
+## Run locally
 
-This will start:
-- **Backend API** on port `3002`
-- **Frontend** on port `8080`
+Use Node.js 22.13 or later in the 22.x release line, npm and a compatible BRC-100 wallet. Both components currently use `npm install` because they do not include lockfiles.
 
-3. Access the application:
-- Frontend: http://localhost:8080
-- Backend API: http://localhost:3002
+From the repository root:
 
-### Production Deployment
-
-The application uses separate subdomains for frontend and backend:
-- **Frontend**: https://age-verification.bsvb.tech (port 8080)
-- **Backend API**: https://age-verification-api.bsvb.tech (port 3002)
-
-This architecture is required because the backend exposes the `/.well-known/auth` endpoint for BSV authentication, which cannot be accessed through a path-based proxy.
-
-In Kubernetes:
-- Expose the frontend service (port 8080) at `age-verification.bsvb.tech`
-- Expose the backend service (port 3002) at `age-verification-api.bsvb.tech`
-- Both services need external access through your ingress controller
-
-### Docker Images
-
-Docker images are automatically built and pushed to GitHub Container Registry (GHCR) when version tags are created.
-
-**Creating a release:**
-```bash
-# Tag a new version
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-This triggers a GitHub Actions workflow that builds and pushes:
-- `ghcr.io/<owner>/<repo>-backend:v1.0.0`
-- `ghcr.io/<owner>/<repo>-frontend:v1.0.0`
-
-Images are also tagged with:
-- `v1.0` (major.minor)
-- `v1` (major)
-
-**Using the images:**
-```bash
-docker pull ghcr.io/<owner>/<repo>-backend:v1.0.0
-docker pull ghcr.io/<owner>/<repo>-frontend:v1.0.0
-```
-
-### Stopping the Services
-
-```bash
-docker-compose down
-```
-
-### Viewing Logs
-
-```bash
-# All services
-docker-compose logs -f
-
-# Backend only
-docker-compose logs -f backend
-
-# Frontend only
-docker-compose logs -f frontend
-```
-
-## Configuration
-
-### Backend Environment Variables
-
-The backend uses the following environment variables (configured in `docker-compose.yaml`):
-
-- `PORT=3002` - Server port
-- `WALLET_STORAGE_URL=https://store-us-1.bsvb.tech` - BSV wallet storage endpoint
-- `SERVER_PRIVATE_KEY=31b0f1bf959e41f4e91cb3419ae9cd6c279b787c2c68da989092478f7d90914a` - Server private key
-- `BSV_NETWORK=mainnet` - BSV network (mainnet/testnet)
-
-### Frontend Environment Variables
-
-The frontend is built with the following configuration:
-
-- `VITE_API_URL=https://age-verification-api.bsvb.tech` - Backend API URL
-
-To customize these values, edit the `args` section under the frontend service in [docker-compose.yaml](docker-compose.yaml).
-
-## Development
-
-### Local Development Without Docker
-
-#### Backend
-
-```bash
+```sh
 cd backend
 npm install
-cp .env.example .env
-# Edit .env with your local configuration
-npm run dev
 ```
 
-#### Frontend
+Create `backend/.env` with your own configuration:
 
-```bash
+```dotenv
+PORT=3002
+SERVER_PRIVATE_KEY=<your-server-wallet-private-key>
+WALLET_STORAGE_URL=<wallet-storage-url-for-your-network>
+BSV_NETWORK=test
+```
+
+Use `test` or `main` for `BSV_NETWORK`, with a matching storage provider. The wallet module contains a fixed fallback private key; supply your own instead of using that shared identity.
+
+The wallet module reads configuration before the entry point calls `dotenv.config()`. Preload the environment so it receives the intended values:
+
+```sh
+NODE_OPTIONS='--env-file=.env' npm run dev
+```
+
+In a second terminal, from the repository root:
+
+```sh
 cd frontend
 npm install
-cp .env.example .env
-# Edit .env with your local configuration
-npm run dev
 ```
 
-## Project Structure
+Create `frontend/.env.local` containing `VITE_API_URL=http://localhost:3002`, then run:
 
-```
-age-verification/
-├── docker-compose.yaml          # Docker Compose configuration
-├── backend/                     # Express.js backend
-│   ├── src/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── .env.example
-└── frontend/                    # React frontend
-    ├── src/
-    ├── Dockerfile
-    ├── nginx.conf
-    ├── package.json
-    └── .env.example
+```sh
+npm run dev -- --host 127.0.0.1
 ```
 
-## Additional Documentation
+Open `http://localhost:5173`. The API URL does not select the certifier. Keep the certifier URL and public key in the frontend aligned with the key expected by the backend.
 
-- [Technical Specification](SPEC.md) - Technical specification and architecture
+## Demonstration behaviour
 
-## License
+The access endpoint returns a video URL after the backend records an accepted `over18` field for the wallet identity. The reset flow relinquishes the wallet certificate and clears the backend's verification state.
 
-ISC
+Verification state exists only in memory. Certificate-field decryption runs asynchronously before request handling continues, so the first authenticated request may arrive before the state is updated.
+
+The sample media under `frontend/public/video/` remains public regardless of the API response. Real content protection would require authorisation at the point where the file is served, plus an appropriate process for verifying age claims.
+
+## Build
+
+Run `npm run build` in each component. For the compiled backend, continue to preload its `.env`:
+
+```sh
+NODE_OPTIONS='--env-file=.env' npm start
+```
+
+The frontend produces `dist/`. Its [README](frontend/README.md) covers container hosting, build configuration and source entry points. No automated test scripts are defined.
+
+## Licence
+
+The existing project documentation and backend package manifest identify ISC. A separate licence file is not included.
