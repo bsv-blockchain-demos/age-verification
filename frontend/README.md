@@ -65,3 +65,7 @@ The build type-checks the application and writes static assets to `dist/`. API c
 - [AccessControlDemo.tsx](src/components/AccessControlDemo.tsx): certificate acquisition, access requests and reset flow.
 - [WalletContext.tsx](src/context/WalletContext.tsx): wallet client setup.
 - [Dockerfile](Dockerfile) and [nginx.conf](nginx.conf): static hosting on container port 8080.
+
+## Licence
+
+This frontend's [package.json](package.json) has no licence declaration. The backend declares the **ISC licence**; see the [repository licence section](../README.md#licence) for the recorded declarations. No standalone licence file is included in this repository.

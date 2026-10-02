@@ -77,4 +77,4 @@ The frontend produces `dist/`. Its [README](frontend/README.md) covers container
 
 ## Licence
 
-The existing project documentation and backend package manifest identify ISC. A separate licence file is not included.
+**Declared licence: ISC.** The existing project documentation identifies ISC, and [backend/package.json](backend/package.json) also declares ISC. The [frontend package](frontend/package.json) has no separate licence declaration. No standalone licence file is included in this repository.
